@@ -1,0 +1,12 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App.jsx';
+import './style.css';
+import './home.css';
+import './work.css';
+import './capture.css';
+import './folio.css';
+import './controls.css';
+createRoot(document.getElementById('root')).render(<App />);
+import './review.css';
+import './flat.css';

@@ -1,0 +1,11 @@
+{
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "functions": { "api/notebook.js": { "maxDuration": 60 } },
+  "rewrites": [
+    { "source": "/api/learning/:path*", "destination": "https://fudaozuoye.com/api/learning/:path*" },
+    { "source": "/api/consent", "destination": "https://fudaozuoye.com/api/consent" },
+    { "source": "/api/providers", "destination": "https://fudaozuoye.com/api/providers" }
+  ],
+  "headers": [{ "source": "/api/:path*", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }]
+}

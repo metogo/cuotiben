@@ -11,7 +11,7 @@ body:has(.work-review) { background: #f2f7f5; }
 .detail-subject { color: var(--deep); background: var(--pale); border-radius: 5px; padding: 2px 8px; font-size: 13px; font-weight: 600; }
 .detail-meta .mistake-count { margin-left: auto; }
 .detail-source .stem { font: 450 clamp(17px, 1.75vw, 21px)/1.85 var(--display); overflow-wrap: anywhere; }
-.detail-task { min-width: 0; background: white; border: 1px solid var(--line); border-radius: 16px; padding: clamp(18px, 2.5vw, 30px); }
+.detail-task { grid-template-columns: minmax(0, 1fr); min-width: 0; background: white; border: 1px solid var(--line); border-radius: 16px; padding: clamp(18px, 2.5vw, 30px); }
 .detail-task h2 { font-size: 18px; letter-spacing: 0; }
 .detail-answer { border-bottom: 1px solid var(--line); padding-bottom: 20px; }
 
@@ -20,6 +20,8 @@ body:has(.work-review) { background: #f2f7f5; }
 .detail-empty { font-size: 14px; color: var(--muted); }
 .detail-section-title { justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
 .detail-section-title small { font-size: 12px; }
+.detail-lesson { min-width: 0; }
+html:has(.detail-dock) { scroll-padding-block-end: calc(72px + env(safe-area-inset-bottom)); }
 .detail-lesson .actions { display: flex; gap: 14px; flex-wrap: wrap; margin: 0; }
 .detail-lesson .hint, .detail-lesson .self-check { box-shadow: none; }
 .detail-lesson .solution-steps:empty { display: none; }

@@ -57,6 +57,8 @@ async function click(p, label) {
     label,
   );
   assert(b.asElement(), label);
+  // A sticky dock may cover a visible button near the edge. Scroll as a touch user would.
+  await b.evaluate(el => el.scrollIntoView({block:'center', inline:'nearest', behavior:'instant'}));
   await b.asElement().click();
 }
 async function openRecord(p) {
@@ -84,10 +86,11 @@ async function circle(p, left, top, right, bottom) {
   await p.mouse.up();
 }
 async function switchModel(page, model) {
-  const panel = await page.waitForSelector('.reader-model', { visible: true });
-  if (!await panel.evaluate(node => node.open)) await page.click('.reader-model summary');
-  await page.waitForFunction(id => [...document.querySelectorAll('.reader-model option')].some(o => o.value === id && !o.disabled), {}, model);
-  await page.select('.reader-model select', model);
+  const target = await page.waitForSelector('.model-option[value="' + model + '"]:enabled', { visible: true });
+  await target.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await target.click();
+  await page.waitForSelector('dialog[open] .primary');
+  await page.click('dialog[open] .primary');
 }
 async function verifyPaste(p, button, cases) {
   await openRecord(p);
@@ -132,8 +135,23 @@ async function collectPhotos(p, button) {
   await hint();
   const firstCrop = await crop();
   const model = 'openai/gpt-5.6-sol';
-  await p.click('.reader-model summary');
-  await p.waitForFunction(() => [...document.querySelectorAll('.reader-model option')].filter(o => !o.disabled).length === 5);
+  await p.waitForFunction(() => document.querySelectorAll('.model-option:enabled').length === 5);
+  const requested = [];
+  const observe = req => {
+    if (req.method() === 'POST' && req.url().endsWith('/api/notebook')) requested.push(req.url());
+  };
+  p.on('request', observe);
+  try {
+    await button('GPT-5.6 Sol');
+    await p.waitForSelector('dialog[open]');
+    assert.match(await p.$eval('#dialog-description', el => el.textContent), /豆包.*GPT-5.6 Sol/);
+    await button('暂不切换');
+    await p.waitForSelector('dialog[open]', { hidden: true });
+    assert.equal(await p.$eval('.model-option[aria-pressed=true]', el => el.value), 'doubao');
+    assert.deepEqual(requested, []);
+  } finally {
+    p.off('request', observe);
+  }
   await p.setOfflineMode(true);
   await switchModel(p, model);
   await p.waitForFunction(() => document.querySelector('[role=alert]')?.textContent.includes('网络连接失败'));
@@ -174,9 +192,11 @@ async function collectPhotos(p, button) {
 }
 async function verifyCorrections(p, button) {
   await (await p.$('.sheet-row')).click();
+  await p.waitForSelector('.detail-correct');
   await captureLayouts(p, '复习');
   await button('去订正');
-  await p.focus('textarea');
+  await p.waitForSelector('.answer-input');
+  await p.focus('.answer-input');
   await p.keyboard.sendCharacter('乘法交换律，所以填 764。');
   await captureLayouts(p, '重做');
   await button('对照答案');
@@ -200,6 +220,7 @@ async function verifyCorrections(p, button) {
   await button('回本题看提示');
   await captureLayouts(p, '再练提示');
   await p.waitForSelector('.hint');
+  await p.waitForSelector('.settings-trigger', {visible:true});
   await p.click('.settings-trigger');
   await button('移除这道题');
   await button('保留');
@@ -210,6 +231,7 @@ async function verifyCorrections(p, button) {
   await p.setViewport({ width: 1280, height: 800 });
   assert(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await (await p.$('.sheet-row')).click();
+  await p.waitForSelector('.settings-trigger', {visible:true});
   await p.click('.settings-trigger');
   await button('移除这道题');
   await button('确认移除');
@@ -232,10 +254,10 @@ async function main() {
     p.on('request', (r) => calls.push(r.url()));
     await p.goto(process.env.SHITI_ORIGIN || 'http://127.0.0.1:43872');
     await p.waitForSelector('.empty-book');
-    await p.waitForFunction(() => document.querySelector('.book-heading img[src="/brand/comma-idle.webp"]')?.naturalWidth > 0);
+    await p.waitForSelector('.book-heading .result-motion svg');
     await captureLayouts(p, '首页');
     await p.screenshot({ path: 'docs/qa/手机首页.png' });
-    assert.equal(calls.filter(u => u.endsWith('/motion/opening.json')).length, 0);
+    assert(calls.some(u => u.endsWith('/motion/opening.json')));
     const cases = JSON.parse(fs.readFileSync(path.join(inputs, 'cases.json')));
     const button = (label) => click(p, label);
     await verifyPaste(p, button, cases);

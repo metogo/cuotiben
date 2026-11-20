@@ -82,16 +82,18 @@ function Modal({ info, close }) {
       className="dialog"
       ref={ref}
       aria-labelledby="dialog-title"
+      aria-describedby="dialog-description"
       onCancel={(e) => {
         e.preventDefault();
         cancel();
       }}
     >
       <span className="dialog-symbol" aria-hidden="true">
-        <Icon name={/放弃|移除/.test(info.yes) ? 'archive' : 'lock'} />
+        {info.symbolImage ? <img src={info.symbolImage} width="28" height="28" alt="" /> :
+          <Icon name={/放弃|移除/.test(info.yes) ? 'archive' : 'lock'} />}
       </span>
       <h2 id="dialog-title">{info.title}</h2>
-      <p>{info.text}</p>
+      <p id="dialog-description">{info.text}</p>
       {info.detailsUrl && <a className="link" href={info.detailsUrl} target="_blank" rel="noreferrer">查看火山方舟数据条款</a>}
       <div className="actions">
         <button className="secondary" autoFocus onClick={cancel}>

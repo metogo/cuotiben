@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
+import StepRuler from './StepRuler.jsx';
 import LearningText from './LearningText.jsx';
 import { Companion, Icon } from './UI.jsx';
 
@@ -73,15 +74,14 @@ export default function Guidance({ d, level = d.lesson.steps.length + 2, show, s
           )}
         </div>
       )}
+      {full && <StepRuler region={region} lesson={lesson} />}
       {!full && (
         <div className="actions">
-          {level <= lesson.steps.length && (
-            <button className={source ? 'lesson-hint' : 'secondary'} onClick={() => reveal(level + 1)}>
-              {source && <span className="lesson-hint-symbol"><Icon name="bulb" /></span>}
-              {level === 0 ? '看提示' : '看下一步'}
-              {source && <Icon name="right" />}
-            </button>
-          )}
+          <button className={source ? 'lesson-hint' : 'secondary'} onClick={() => reveal(level + 1)}>
+            {source && <span className="lesson-hint-symbol"><Icon name="bulb" /></span>}
+            {level === 0 ? '看提示' : level > lesson.steps.length ? '查看自检' : '看下一步'}
+            {source && <Icon name="right" />}
+          </button>
         </div>
       )}
       {source && level > 0 && <small className="lesson-source">讲解来源 · {source}</small>}

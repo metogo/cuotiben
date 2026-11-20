@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Companion, Icon, MistakeCount } from './UI.jsx';
+import { Icon, MistakeCount } from './UI.jsx';
+import BookHeading from './BookHeading.jsx';
+import NotebookEmpty from './NotebookEmpty.jsx';
 import StorageInfo from './StorageInfo.jsx';
 import LearningText from './LearningText.jsx';
 import { corrected } from '../core/book.ts';
@@ -7,13 +9,10 @@ import { subjects, subjectKey, subjectName } from '../../shared/subjects.js';
 
 const shortDate = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' });
 
-function NotebookHeader({ record }) {
+function NotebookHeader({ record, active }) {
   return (
     <header className="notebook-title">
-      <div className="book-heading">
-        <Companion />
-        <h1 id="book-title">错题本</h1>
-      </div>
+      <BookHeading active={active} />
       <button type="button" className="record-trigger" onClick={record}>
         <Icon name="pencil" />录题
       </button>
@@ -37,34 +36,28 @@ function ListEndFade() {
   </>;
 }
 
-function QuestionList({ visible, emptyBook, open, reset }) {
-  if (!visible.length) return (
-    <div className="empty-book">
-      {emptyBook && <Companion pose="idle" />}
-      <h3>{emptyBook ? '还没有收录的错题' : '当前筛选下没有错题'}</h3>
-      {emptyBook ? <p>点「录题」，记下第一道错题。</p> : <button className="link" onClick={reset}>查看全部错题</button>}
-    </div>
-  );
+function QuestionList({ visible, open }) {
   return <div className="list">{visible.map(row => {
     const done = corrected(row);
     return <article className="notebook-row" key={row.id}>
-      <button className="sheet-row" onClick={() => open(row)}>
-        <span className="text"><strong><LearningText text={row.q} /></strong>
-          <span className="question-meta">
-            <small>{subjectName(row.subject)} · {shortDate.format(row.date)}</small>
-            <span className={'state ' + (done ? 'finished' : '')}>{done ? '已订正' : '待订正'}</span>
-            <MistakeCount count={row.mistakeCount} />
-          </span>
-        </span>
+      <button type="button" className="sheet-row" onClick={() => open(row)}>
+        <LearningText text={row.q} preview />
       </button>
-      {!done && <button type="button" className="quick-correct" onClick={() => open(row, 'correct')}>
-        去订正<Icon name="right" />
-      </button>}
+      <div className="question-footer">
+        <span className="question-meta">
+          <small>{subjectName(row.subject)} · {shortDate.format(row.date)}</small>
+          <span className={'state ' + (done ? 'finished' : '')}>{done ? '已订正' : '待订正'}</span>
+          <MistakeCount count={row.mistakeCount} />
+        </span>
+        {!done && <button type="button" className="quick-correct" onClick={() => open(row, 'correct')}>
+          去订正<Icon name="right" />
+        </button>}
+      </div>
     </article>;
   })}<ListEndFade /></div>;
 }
 
-export default function Home({ rows, loading, open, record, error, filter, selectFilter, subject, selectSubject }) {
+export default function Home({ active = true, rows, loading, open, record, error, filter, selectFilter, subject, selectSubject }) {
   const present = new Set(rows.map(row => subjectKey(row.subject)));
   if (subject !== 'all') present.add(subject);
   const grouped = subject === 'all' ? rows : rows.filter(row => subjectKey(row.subject) === subject);
@@ -74,7 +67,7 @@ export default function Home({ rows, loading, open, record, error, filter, selec
   return (
     <>
       <section className="notebook-home" aria-labelledby="book-title">
-        <NotebookHeader record={record} />
+        <NotebookHeader record={record} active={active} />
         <div className="notebook-library">
           <div className="notebook-toolbar">
             <div className="filters" role="group" aria-label="订正状态">
@@ -87,12 +80,14 @@ export default function Home({ rows, loading, open, record, error, filter, selec
               {[...Object.keys(subjects), 'unknown'].filter(id => present.has(id)).map(id =>
                 <option key={id} value={id}>{subjectName(id)}</option>)}
             </select>
-            <small>最近收录在前</small>
+            {visible.length > 0 && <small>最近收录在前</small>}
             </div>}
           </div>
           {error ? <p className="alert" role="alert">{error}</p> : loading ?
             <p role="status">正在读取错题本…</p> :
-            <QuestionList visible={visible} emptyBook={!rows.length} open={open}
+            visible.length ? <QuestionList visible={visible} open={open} /> :
+            <NotebookEmpty filter={filter} subject={subject} grouped={grouped} hasOtherSubjects={rows.length > grouped.length}
+              record={record} selectFilter={selectFilter} open={open}
               reset={() => { selectSubject('all'); selectFilter('全部'); }} />}
         </div>
       </section>

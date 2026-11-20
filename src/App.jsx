@@ -41,6 +41,7 @@ function useBack({
   setLevel,
   d,
   beforePhoto,
+  correctionParent,
   write,
   setPhoto,
   title,
@@ -80,6 +81,8 @@ function useBack({
       notice('操作已取消，原稿已保留。');
       return;
     }
+    const settings = document.querySelector('dialog.subject-sheet[open]');
+    if (settings) { settings.close(); return; }
     if (page === 'result') {
       nav(d.img ? 'crop' : 'edit');
       return;
@@ -91,8 +94,9 @@ function useBack({
     if (page === 'correct') {
       const workspace = document.querySelector('dialog.ink-workspace[open]');
       if (workspace) { workspace.close(); return; }
-      if (attempt.answer.trim() || attempt.ink?.strokes.length || attempt.ink?.transcript || attempt.paper) discard('之前的订正记录会保留。', () => nav('review'));
-      else nav('review');
+      const leave = () => correctionParent.current === 'home' ? home() : nav('review');
+      if (attempt.answer.trim() || attempt.ink?.strokes.length || attempt.ink?.transcript || attempt.paper) discard('之前的订正记录会保留。', leave);
+      else leave();
       return;
     }
     if (page === 'score') {
@@ -243,7 +247,8 @@ function CapturePages({
           d={d}
           focusField={editField}
           update={(v) => {
-            write((prev) => ({ ...prev, ...v, lesson: undefined }));
+            write(prev => Object.entries(v).every(([key, value]) => prev[key] === value)
+              ? prev : { ...prev, ...v, lesson: undefined });
             notice('');
           }}
           generate={generate}
@@ -258,6 +263,7 @@ function CapturePages({
 }
 function ReviewPages({
   page,
+  ask,
   generate,
   d,
   level,
@@ -281,6 +287,7 @@ function ReviewPages({
       )}
       {page === 'result' && (
         <Reader
+          ask={ask}
           d={d}
           save={save}
           generate={generate}
@@ -320,7 +327,7 @@ function ReviewPages({
     </>
   );
 }
-function recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, attempt }) {
+function recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, attempt, correctionParent }) {
   function save(continuePhoto = false) {
     job.run('正在保存…', async () => {
       const row = {
@@ -346,11 +353,12 @@ function recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, at
       if (item.lesson.provider === 'doubao') item.lesson.steps = readingSteps(item.lesson.steps);
       write(item);
       setLevel(0);
-      if (to === 'correct') begin();
+      if (to === 'correct') startAttempt('home');
       else nav(to);
     });
   }
-  function begin() {
+  function startAttempt(parent) {
+    correctionParent.current = parent;
     setAttempt({ id: crypto.randomUUID(), answer: '', paper: false });
     nav('correct');
   }
@@ -361,7 +369,7 @@ function recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, at
       nav('score');
     });
   }
-  return { save, review, begin, finish };
+  return { save, review, begin: () => startAttempt('review'), finish };
 }
 function useFlow() {
   const book = useNotebook(),
@@ -377,7 +385,7 @@ function useFlow() {
     [filter, selectFilter] = useState('全部'),
     [subject, selectSubject] = useState('all'),
     [attempt, setAttempt] = useState(null);
-  const beforePhoto = useRef(null),
+  const correctionParent = useRef('review'), beforePhoto = useRef(null),
     title = useRef(),
     editField = useRef(null),
     entry = useRef(null),
@@ -425,6 +433,7 @@ function useFlow() {
     setLevel,
     d,
     beforePhoto,
+    correctionParent,
     write,
     setPhoto,
     title,
@@ -478,7 +487,7 @@ function useFlow() {
       }),
     });
   }
-  const { save, review, begin, finish } = recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, attempt });
+  const { save, review, begin, finish } = recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, attempt, correctionParent });
   const next = book.rows.find((r) => r.id !== d.id && !corrected(r) && (subject === 'all' || (r.subject || 'unknown') === subject));
   return {
     page, nav, home, back, title, modal, ask,
@@ -511,6 +520,7 @@ export default function App() {
         {page === 'add' && <RecordSheet close={back} photo={pick} text={edit} />}
         {page === 'home' || page === 'add' ? (
           <Home
+            active={page === 'home'}
             rows={book.rows}
             loading={book.loading}
             filter={filter}
@@ -539,7 +549,7 @@ export default function App() {
               {correctionStep >= 0 && <small className="correction-progress" aria-label={`第 ${correctionStep + 1} 步，共 3 步`}>{correctionStep + 1} / 3</small>}
               {!compactHeader && !checking && <StageTrack page={job.preview ? 'result' : page} />}
             </header>
-            {job.preview && <LiveLesson job={job} />}
+            <LiveLesson job={job} lesson={flow.d.lesson} />
             <fieldset className="page-fields" hidden={Boolean(job.preview)} disabled={Boolean(job.busy)}>
               <CapturePages {...flow} />
               <ReviewPages {...flow} />

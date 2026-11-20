@@ -45,7 +45,13 @@ async function verify(page) {
   assert.deepEqual(await page.$$eval('.filters b', a => a.map(b => b.textContent)), ['1','0','1']);
   await page.select('.subject-filter', 'english');
   await page.waitForSelector('.empty-book');
-  await click(page, '查看全部错题');
+  await click(page, '开始订正');
+  await page.waitForSelector('.correction-progress');
+  await page.goBack();
+  await page.waitForSelector('.subject-filter');
+  assert.equal(await page.$eval('.subject-filter', e => e.value), 'english');
+  await page.select('.subject-filter', 'all');
+  await page.click('.filters button:first-child');
   assert.equal((await page.$$('.sheet-row')).length, 2);
   for (const width of [320, 390, 810]) {
     await page.setViewport({width, height:844});
@@ -78,13 +84,14 @@ async function verify(page) {
   await page.waitForSelector('.sheet-row');
   await page.select('.subject-filter', 'unknown');
   await page.click('.sheet-row');
+  await page.waitForSelector('.settings-trigger', {visible:true});
   await page.click('.settings-trigger');
   await page.click('.subject-options button[value=math]');
   await page.waitForFunction(() => !document.querySelector('.job-state') && document.querySelector('.detail-subject')?.textContent === '数学');
   await page.reload();
   await page.waitForSelector('.sheet-row');
   await page.select('.subject-filter','math');
-  assert.match(await page.$eval('.sheet-row',el=>el.textContent),/已订正/);
+  assert.match(await page.$eval('.notebook-row .state',el=>el.textContent),/已订正/);
   assert(!(await options()).includes('unknown'));
   const reduced = await page.browser().createBrowserContext();
   try {

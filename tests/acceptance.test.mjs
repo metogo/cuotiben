@@ -33,7 +33,13 @@ for (const name of ['opening', 'collected', 'corrected', 'again']) {
     const raw = readFileSync('public/motion/' + name + '.json'),
       anim = JSON.parse(raw);
     assert.ok(anim.layers.length >= 2 && anim.layers.every((l) => l.nm && l.ty === 4));
-    assert.ok(anim.op / anim.fr <= 0.65 && gzipSync(raw).length < 30 * 1024);
+    if (name === 'opening') {
+      const finish = anim.markers.find(marker => marker.cm === '庆祝完成');
+      assert.ok(finish.tm / anim.fr <= 3);
+      assert.equal(finish.dr / anim.fr, 2);
+      assert.equal(finish.tm + finish.dr, anim.op);
+    } else assert.ok(anim.op / anim.fr <= 0.65);
+    assert.ok(gzipSync(raw).length < 30 * 1024);
     assert.ok(readFileSync('public/motion/' + name + '.svg', 'utf8').includes('<path'));
   });
 }

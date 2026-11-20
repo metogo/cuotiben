@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { launch } = require(process.env.PUPPETEER_MODULE || 'puppeteer');
-const { click, choosePhoto, openRecord } = require('./browser-acceptance.cjs');
+const { click, choosePhoto, openRecord, switchModel } = require('./browser-acceptance.cjs');
 
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shiti-single-'));
@@ -77,12 +77,10 @@ async function main() {
     await p.waitForSelector('.live-lesson', { visible: true });
     await p.waitForSelector('.work-result .guidance .hint', { visible: true, timeout: 185000 });
     assert.equal(await p.$('.original-photo'), null);
-    await p.click('.reader-model summary');
     const alternate = 'openai/gpt-5.6-sol';
-    await p.waitForFunction(id => [...document.querySelectorAll('.reader-model option')].some(o => o.value === id && !o.disabled), {}, alternate);
-    await p.select('.reader-model select', alternate);
+    await switchModel(p, alternate);
     await p.waitForSelector('.live-lesson', { visible: true });
-    await p.waitForFunction(id => document.querySelector('.reader-model select')?.value === id &&
+    await p.waitForFunction(id => document.querySelector('.model-option[aria-pressed=true]')?.value === id &&
       !document.querySelector('.live-lesson') && !document.querySelector('[role=alert]'), {timeout:185000}, alternate);
     assert.equal(await p.$('.manuscript textarea'), null);
     await click(p, '修改题目');

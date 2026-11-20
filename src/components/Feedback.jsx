@@ -3,8 +3,7 @@ import posters from '../core/motion-posters.js';
 const stills = Object.fromEntries(
   Object.entries(posters).map(([name, svg]) => [name, 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)]),
 );
-let openingPlayed = false;
-export default function Feedback({ kind, enabled = true }) {
+export default function Feedback({ kind, enabled = true, onReady }) {
   const ref = useRef(null),
     [playing, setPlaying] = useState(false);
   useEffect(() => {
@@ -17,7 +16,7 @@ export default function Feedback({ kind, enabled = true }) {
       setPlaying(false);
     }
     async function play() {
-      if (!enabled || pref.matches || (kind === 'opening' && openingPlayed)) return;
+      if (!enabled || pref.matches) return;
       try {
         const [module, res] = await Promise.all([
           import('lottie-web/build/player/esm/lottie_light.min.js'),
@@ -35,7 +34,7 @@ export default function Feedback({ kind, enabled = true }) {
         });
         animation.addEventListener('DOMLoaded', () => {
           if (!abort.signal.aborted) {
-            if (kind === 'opening') openingPlayed = true;
+            onReady?.(animation);
             setPlaying(true);
             animation.play();
           }
@@ -45,14 +44,19 @@ export default function Feedback({ kind, enabled = true }) {
         if (!abort.signal.aborted) stop();
       }
     }
+    function restore(event) {
+      if (event.persisted && kind === 'opening' && !pref.matches) animation?.goToAndPlay(0, true);
+    }
     play();
+    if (kind === 'opening') window.addEventListener('pageshow', restore);
     pref.addEventListener('change', stop);
     return () => {
       abort.abort();
       animation?.destroy();
+      window.removeEventListener('pageshow', restore);
       pref.removeEventListener('change', stop);
     };
-  }, [kind, enabled]);
+  }, [kind, enabled, onReady]);
   return (
     <div aria-hidden="true" className="result-motion">
       <img alt="" hidden={playing} src={stills[kind]} />

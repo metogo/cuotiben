@@ -1,5 +1,6 @@
 // Editable artwork in a 96 × 96 composition. Times are authored in 60 fps frames.
 import { writeFileSync } from 'node:fs';
+import { biteFrames, releaseFrames, celebrationStart, celebrationFrames, openingFrames } from '../src/core/opening.js';
 const ink = '#175c50',
   sage = '#6b9a85',
   paper = '#eef6ee',
@@ -182,17 +183,20 @@ const again = [
   layer('题页第一行', line([32, 53], [45, 54], sage)),
   layer('保留的题页', shape(leaf, true, paper, ink)),
 ];
-const path = (pts, closed, fill, stroke, w = 2) =>
-  '<path d="M' +
-  pts.map((p) => p.join(' ')).join(' L') +
-  (closed ? ' Z' : '') +
-  '" fill="' +
-  (fill || 'none') +
-  '" stroke="' +
-  (stroke || 'none') +
-  '" stroke-width="' +
-  w +
-  '" stroke-linecap="round" stroke-linejoin="round"/>';
+function path(shape, x, y, fill, stroke, width = 2) {
+  const point = ([px, py], [dx, dy] = [0, 0]) => [px + dx + x, py + dy + y].join(' ');
+  let d = 'M' + point(shape.v[0]);
+  for (let end = 1; end <= shape.v.length; end++) {
+    const next = end % shape.v.length;
+    const from = shape.o[end - 1], to = shape.i[next];
+    if (next === 0 && !shape.c) break;
+    if (from.some(Boolean) || to.some(Boolean))
+      d += ' C' + point(shape.v[end - 1], from) + ' ' + point(shape.v[next], to) + ' ' + point(shape.v[next]);
+    else if (next) d += ' L' + point(shape.v[next]);
+  }
+  return '<path d="' + d + (shape.c ? ' Z' : '') + '" fill="' + (fill || 'none') + '" stroke="' +
+    (stroke || 'none') + '" stroke-width="' + width + '" stroke-linecap="round" stroke-linejoin="round"/>';
+}
 function endValue(property) {
   return property.a ? property.k.at(-1).s : property.k;
 }
@@ -200,7 +204,8 @@ function staticLayer(l) {
   if (Number(endValue(l.ks.o)) === 0) return '';
   const [x, y] = endValue(l.ks.p),
     items = l.shapes;
-  const shape = items.find((item) => item.ty === 'sh').ks.k;
+  const outline = items.find((item) => item.ty === 'sh').ks;
+  const shape = outline.a ? endValue(outline)[0] : outline.k;
   const fill = items.find((item) => item.ty === 'fl'),
     stroke = items.find((item) => item.ty === 'st');
   const hex = (item) =>
@@ -215,29 +220,77 @@ function staticLayer(l) {
         .join('');
   return (
     path(
-      shape.v.map(([px, py]) => [px + x, py + y]),
-      shape.c,
+      shape, x - endValue(l.ks.a)[0], y - endValue(l.ks.a)[1],
       hex(fill),
       hex(stroke),
       stroke?.w.k,
     )
   );
 }
-// The cover opens, the ruled lines appear, then the bookmark settles.
+// The mouth opens in the silhouette itself so it works on any page background.
+function contour(points, incoming, outgoing, fill) {
+  const parts = shape(points, true, fill);
+  Object.assign(parts[0].ks.k, { i: incoming, o: outgoing });
+  return parts;
+}
+const body = contour(
+  [[46,9],[82,47],[33,87],[20,84],[48,67],[15,52],[13,46],[13,39]],
+  [[-19,0],[0,-23],[29,4],[0,2],[-4,10],[4,10],[0,3],[0,3]],
+  [[20,0],[0,23],[-6,0],[11,2],[-16,1],[-1,-2],[-.4,-3],[1,-17]], '#101843');
+const closed = body[0].ks.k;
+// A notch opens on the eye side; the comma tail stays in its original silhouette.
+const open = structuredClone(closed);
+open.v.splice(5,3,[18,56],[44,45],[14,34]);
+open.i.splice(5,3,[4,8],[-4,3],[4,2]);
+open.o.splice(5,3,[3,-1],[-5,-2],[2,-14]);
+const puff = structuredClone(closed);
+puff.v[1] = [89,46];
+puff.v[5] = [10,53];
+body[0].ks = tween([
+  [0,[closed]], ...biteFrames.flatMap(t => [[t-12,[closed]], [t-5,[open]], [t,[closed]]]),
+  [90,[puff]], [100,[closed]],
+  ...releaseFrames.flatMap(t => [[t-4,[puff]], [t+1,[open]], [t+6,[closed]]]),
+]);
+const eye = contour(
+  [[33,28],[38,36],[33,44],[28,36]],
+  [[-3,0],[0,-4.5],[3,0],[0,4.5]], [[3,0],[0,4.5],[-3,0],[0,-4.5]], '#ffc53c');
+// Celebration times are relative to the settled title. The gold eye curves into a smile.
+const celebrate = stops => stops.map(([t, value]) => [celebrationStart + t, value]);
+const restingEye = eye[0].ks.k;
+const smilingEye = {
+  c: true, v: [[33,27],[43,36],[33,33],[23,36]],
+  i: [[-6,0],[0,-4],[5,0],[0,6]], o: [[6,0],[0,6],[-5,0],[0,-4]],
+};
+eye[0].ks = tween(celebrate([[0,[restingEye]], [13,[smilingEye]], [88,[smilingEye]], [119,[restingEye]]]));
+const finishMark = layer('落地亮起的金色小勾', [
+  ...shape([[72,11],[78,17],[91,4]], false, null, '#bf871d', 4),
+  { ty:'tm', s:prop(0), e:tween(celebrate([[43,[0]], [49,[31]], [62,[100]]])), o:prop(0), m:1 },
+], { o:tween(celebrate([[42,[0]], [48,[100]], [84,[100]], [105,[0]]])) });
 const opening = [
-  layer('落下的书签', shape([[62,24],[70,23],[70,43],[66,39],[62,44]], true, '#d7973d'), {
-    p: tween([[0,[0,-8,0]], [12,[0,-8,0]], [27,[0,1,0]], [35,[0,0,0]]]),
-    o: tween([[0,[0]], [10,[0]], [18,[100]]]),
+  finishMark,
+  { ...layer('望向落点，收尾眨眼', eye, {
+    a: prop([33,36,0]),
+    p: tween([[0,[33,36,0]], [7,[40,32,0]], [30,[30,33,0]], [79,[29,32,0]], [99,[33,36,0]],
+      [112,[29,30,0]], [154,[29,30,0]], [170,[33,36,0]]]),
+    s: tween([[0,[100,100,100]], [88,[102,76,100]], [101,[100,100,100]],
+      [160,[100,100,100]], [164,[111,14,100]], [170,[100,100,100]]]),
+  }), parent: 3 },
+  layer('左侧咬字，鼓腮吹字', body, {
+    a: prop([46,83,0]), p: prop([46,83,0]),
+    r: tween([[0,[0]], [7,[-7]], [19,[9]], [31,[0]],
+      ...biteFrames.flatMap(t => [[t-5,[-4]], [t,[3]]]), [98,[0]],
+      ...releaseFrames.flatMap(t => [[t-3,[3]], [t+2,[-6]], [t+7,[0]]]),
+      ...celebrate([[0,[0]], [12,[-7]], [27,[11]], [43,[-5]], [59,[9]], [75,[-7]], [92,[3]], [119,[0]]])]),
+    s: tween([[0,[100,100,100]], [7,[108,89,100]], [15,[96,104,100]], [31,[105,94,100]],
+      ...biteFrames.flatMap(t => [[t-5,[97,104,100]], [t,[106,95,100]]]), [98,[100,100,100]],
+      ...releaseFrames.flatMap(t => [[t-4,[106,94,100]], [t+1,[94,104,100]], [t+7,[100,100,100]]]),
+      ...celebrate([[0,[100,100,100]], [12,[110,86,100]], [19,[95,106,100]], [32,[100,100,100]],
+        [43,[111,87,100]], [51,[98,102,100]], [65,[101,98,100]], [92,[100,100,100]]])]),
   }),
-  layer('内页第一行', [...line([23,40],[40,44],ink,3), dash]),
-  layer('内页第二行', [...line([23,49],[36,52],sage,3), dash]),
-  layer('右页', shape([[48,28],[80,21],[80,68],[48,76]],true,'#c6e4d7',ink,3),
-    {p:tween([[0,[-10,3,0]], [19,[1,0,0]], [29,[0,0,0]]])}),
-  layer('左页', shape([[15,21],[48,28],[48,76],[15,68]],true,paper,ink,3)),
 ];
 const posters = {};
 for (const [kind, frames, layers] of [
-  ['opening', 36, opening],
+  ['opening', openingFrames, opening],
   ['collected', 30, collected],
   ['corrected', 39, corrected],
   ['again', 24, again],
@@ -253,6 +306,7 @@ for (const [kind, frames, layers] of [
     h: 96,
     ddd: 0,
     assets: [],
+    ...(kind === 'opening' ? { markers:[{ tm:celebrationStart, dr:celebrationFrames, cm:'庆祝完成' }] } : {}),
     layers: layers.map((l, i) => ({ ...l, ind: i + 1, op: frames })),
   };
   writeFileSync('public/motion/' + kind + '.json', JSON.stringify(data));

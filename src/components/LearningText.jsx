@@ -14,8 +14,35 @@ function prose(value) {
     return part;
   });
 }
-export default function LearningText({ text }) {
-  return formulaParts(text).map((part, i) =>
+// Shorten the excerpt before layout so WebKit can size every math line naturally.
+function previewParts(text) {
+  let available = 64;
+  const excerpt = [];
+  for (const part of formulaParts(text)) {
+    if (available <= 0) {
+      excerpt.push({ text: '…' });
+      break;
+    }
+    if (part.formula) {
+      excerpt.push({ ...part, display: false });
+      available -= part.formula.length;
+      continue;
+    }
+    const words = part.text.replace(/^#{1,6} /gm, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\s+/g, ' ');
+    const chars = Array.from(words);
+    if (chars.length > available) {
+      excerpt.push({ text: chars.slice(0, available).join('').trimEnd() + '…' });
+      break;
+    }
+    excerpt.push({ text: words });
+    available -= chars.length;
+  }
+  return excerpt;
+}
+
+export default function LearningText({ text, preview = false }) {
+  const parts = preview ? previewParts(text) : formulaParts(text);
+  return parts.map((part, i) =>
     part.formula ? (
       <Suspense key={i} fallback={<span className="formula-loading" role="img" aria-label="正在排版公式" />}>
         <Formula source={part.formula} display={part.display} />

@@ -4,7 +4,7 @@ import { OriginalPhoto } from './QuestionSheet.jsx';
 import ModelPicker from './ModelPicker.jsx';
 import Guidance from './Guidance.jsx';
 
-export default function Reader({ d, save, edit, generate, error }) {
+export default function Reader({ d, save, edit, generate, ask, error }) {
   const editQuestion = <button className="link reader-edit" onClick={() => edit('question')}>修改题目</button>;
   return (
     <div className="study-task result-reader">
@@ -19,11 +19,8 @@ export default function Reader({ d, save, edit, generate, error }) {
         </section>
       )}
       <button className="link supplement-work" onClick={() => edit('child')}>补充孩子的原作答</button>
-      <details className="reader-model">
-        <summary>换个模型试一试</summary>
-        <ModelPicker selected={d.model} change={model => generate({ ...d, model })} />
-        <small>选择后，题目和已填的原作答会发给所选模型重新解析。</small>
-      </details>
+      <ModelPicker selected={d.model} hasChild={Boolean(d.child?.trim())} ask={ask}
+        change={model => generate({ ...d, model })} />
       {d.lesson && (
         <div className="save-dock">
           <p className="save-note">收录后保存在当前浏览器</p>

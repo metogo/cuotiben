@@ -32,10 +32,12 @@ async function main() {
     const first = await stem();
     assert.match(first, /436.*157.*242/s);
     const initialUploads = uploads.length;
+    const cachedStart = Date.now();
     await reframe();
     await button('解析框内题目');
     assert.equal(await stem(), first);
     assert.equal(uploads.length, initialUploads);
+    console.log('同一选区回到解析再打开核对，新增分析请求 0，耗时', Date.now() - cachedStart, 'ms');
     await reframe();
     await circle(p, 64, 442, 485, 487);
     await p.setOfflineMode(true);

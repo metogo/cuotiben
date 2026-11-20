@@ -10,7 +10,15 @@ async function setText(page, field, value) {
   await page.keyboard.press('Tab');
 }
 async function result(page) {
-  await page.waitForFunction(() => document.querySelector('.hint, [role=alert]') && !document.querySelector('.job-state'), { timeout: 185000 });
+  const settled = () => page.waitForFunction(() => document.querySelector('.hint, [role=alert]') && !document.querySelector('.job-state'), { timeout: 185000 });
+  await settled();
+  const alert = await page.$('[role=alert]');
+  if (alert && /过于频繁/.test(await alert.evaluate(el => el.textContent))) {
+    console.log('收到真实限流提示，保留原题，稍后通过重新解析恢复。');
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    await click(page, '重新解析');
+    await settled();
+  }
   assert(await page.$('.hint'), await page.$eval('main', (el) => el.innerText.slice(-200)));
 }
 async function verify(page, cases, original) {
@@ -63,6 +71,7 @@ async function verify(page, cases, original) {
   await page.waitForSelector('.sheet-row');
   assert.equal((await page.$$('.sheet-row')).length, 1);
   await page.click('.sheet-row');
+  await page.waitForSelector('.detail-correct', {visible:true});
   assert.equal(await page.$('.hint, .child-note'), null);
   await button('去订正');
   await button('已在纸上做完，对照答案');

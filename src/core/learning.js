@@ -1,3 +1,4 @@
+import { notebookOrigins } from '../../shared/notebook-origins.js';
 import { readSSE } from '../../shared/sse.js';
 import { lessonPreview } from './lessonPreview.js';
 
@@ -10,8 +11,11 @@ function browserId() {
 
 async function request(body, entryId, signal, publish) {
   const deviceId = navigator.locks ? await navigator.locks.request('notebook-device', browserId) : browserId();
-  const response = await fetch('/api/notebook', {
-    method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
+  const direct = body.model === 'doubao' && notebookOrigins.has(location.origin);
+  const url = direct ? import.meta.env.VITE_NOTEBOOK_DOUBAO_URL : '/api/notebook';
+  if (!url) throw Error('此版本缺少错题本解析服务地址。');
+  const response = await fetch(url, {
+    method: 'POST', credentials: direct ? 'omit' : 'same-origin', cache: 'no-store', signal,
     headers: { 'Content-Type': 'application/json', Accept: publish ? 'text/event-stream' : 'application/json' },
     body: JSON.stringify({ ...body, deviceId, entryId }),
   });

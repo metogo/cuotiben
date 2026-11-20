@@ -30,7 +30,7 @@ async function readInput(req) {
 function frame(event, value) {
   return 'event: ' + event + '\ndata: ' + JSON.stringify(value) + '\n\n';
 }
-export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
+export function notebookHandler(key, timeoutMs = 120000, config = process.env, allowedOrigins) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -43,7 +43,8 @@ export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
     let stage = 'input';
     const origin = req.headers.origin;
     try {
-      if (!origin || !['http://' + req.headers.host, 'https://' + req.headers.host].includes(origin))
+      const trusted = allowedOrigins ? allowedOrigins.has(origin) : ['http://' + req.headers.host, 'https://' + req.headers.host].includes(origin);
+      if (!origin || !trusted)
         throw new ServiceError(403, '请从当前网页发起解析。');
       const body = await readInput(req);
       if (body?.model === 'doubao') validateDoubaoInput(body);

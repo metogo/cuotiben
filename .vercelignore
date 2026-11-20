@@ -7,3 +7,4 @@ tests
 scripts
 *.md
 .clinerules-*
+functions

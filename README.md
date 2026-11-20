@@ -11,11 +11,11 @@ npm ci
 npm run dev -- --port 43872 --strictPort
 ```
 
-在项目根目录的本地服务端环境设置 `REQUESTY_API_KEY`。默认网关为用户确认的 Requesty 全球入口。服务端限定模型、输入结构与输出长短，浏览器只与本站交互。密钥不会被打进 Vite 客户端。[Requesty 接入说明](https://docs.requesty.ai/quickstart)
+在项目根目录的本地服务端环境设置 `REQUESTY_API_KEY`。默认网关为用户确认的 Requesty 全球入口。Requesty 请求由错题本的同源接口校验并转发。密钥不会被打进 Vite 客户端。[Requesty 接入说明](https://docs.requesty.ai/quickstart)
 
-默认豆包使用错题本自己的服务端变量 `DOUBAO_API_KEY`、`DOUBAO_MODEL_ID`。照片和文字都直接 POST 到本站 `/api/notebook`，一次请求完成读题、解析和流式返回。学科只用于本机归档，空缺时显示“未分类”。
+默认豆包使用错题本自己的服务端变量 `DOUBAO_API_KEY`、`DOUBAO_MODEL_ID`。本机直接使用 `/api/notebook`。线上 H5 由 `VITE_NOTEBOOK_DOUBAO_URL` 指向腾讯上海的错题本专属 HTTP 函数 `cuotiben-ai`。豆包照片、文字和笔迹请求直接发送到此函数，一次请求完成解析。Requesty 通过 Vercel 同源接口处理。学科只用于本机归档，空缺时显示“未分类”。
 
-错题本使用 `CLOUDBASE_ENV_ID`、`CLOUDBASE_APIKEY` 访问上海区的专属集合 `cuotiben_daily_usage`。每日按北京时间、匿名浏览器身份计数，跨模型共 30 次，相同请求重试复用记录。集合仅存匿名摘要、日期及请求摘要，不存题干、照片、作答。首次使用需创建同名集合并向服务端账户授予读写权限。以上配置仅供服务端读取。
+错题本使用 `CLOUDBASE_ENV_ID`、`CLOUDBASE_APIKEY` 访问上海区的专属集合 `cuotiben_daily_usage`。每日按北京时间、匿名浏览器身份计数，跨模型共 30 次，相同请求重试复用记录。集合仅存匿名摘要、日期及请求摘要，不存题干、照片、作答。首次使用需创建同名集合并向服务端账户授予读写权限。密钥仅供服务端读取。浏览器只接收公开的函数地址。
 
 照片和粘贴都在同一个家庭入口使用。首次发送选区前，页面向家长说明接收方、用途与留存条件。用户同意后，由错题本直接转发选区给豆包。默认选整张，点“识别整张图”会发送整图；手动圈题只发送框内图片。家长可修改识别文字、重圈或在识别失败时照图补录。收录成功后，本题选区和讲解保存在本机。老师的参考答案单独保留到完整解析和订正对照页。[方舟平台条款](https://docs.volcengine.com/docs/ark/volcengine-ark-platform-terms?lang=zh) · [调用日志说明](https://console.volcengine.com/ark/region%3Acn-beijing/docs/log-collection)
 
@@ -61,6 +61,6 @@ SHITI_PAPERS=/tmp/shiti-papers node scripts/browser-acceptance.cjs
 
 生产配置也要提前验证。在预览通过后，用 `vercel deploy --prod --skip-domain` 构建候选版本，记录部署 ID 和构建网址。用 `vercel alias set <构建网址> cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app` 将同一个验收入口指向候选版本。复测文字与照片录题后，用 `vercel promote <生产候选部署ID>` 发布已测构建，并通过普通浏览器在正式域名重测。发布前用 `vercel inspect https://cuotiben-orpin.vercel.app` 记录上一版部署 ID，便于回滚。
 
-预览和生产均须为错题本服务端配置豆包、Requesty 和专属计数集合的凭据。
+预览和生产使用固定域名。设置公开的 `VITE_NOTEBOOK_DOUBAO_URL` 后重新构建 H5。云端通过环境变量配置身份凭据，`node scripts/deploy-cloud-notebook.mjs` 只创建错题本函数及其 HTTP 路径，更新既有函数使用 `--update`。
 
 故障经过、实测数据和后续直连修复见[生产网关验收](docs/qa/生产网关验收.md)。

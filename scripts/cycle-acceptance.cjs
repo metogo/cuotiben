@@ -6,12 +6,22 @@ const { click, openRecord } = require('./browser-acceptance.cjs');
 
 async function notebook(page) {
   return page.evaluate(async () => {
-    const { list, get } = await import('/src/core/book.ts');
-    const summaries = await list();
-    return Promise.all(summaries.map(async summary => {
-      const { id, q, subject, attempts, lesson } = await get(summary.id);
-      return { id, q, subject, attempts, lesson, summary };
-    }));
+    const read = request => new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const db = await read(indexedDB.open('shiti-family-live'));
+    try {
+      const tx = db.transaction(['list', 'questions', 'reviews']);
+      const [summaries, questions, reviews] = await Promise.all(
+        ['list', 'questions', 'reviews'].map(name => read(tx.objectStore(name).getAll()))
+      );
+      return summaries.sort((a, b) => b.date - a.date).map(summary => {
+        const { id, q, lesson, attempts } = questions.find(row => row.id === summary.id);
+        const history = reviews.find(row => row.id === id);
+        return { id, q, subject: summary.subject, lesson, attempts: history?.attempts ?? attempts, summary };
+      });
+    } finally { db.close(); }
   });
 }
 

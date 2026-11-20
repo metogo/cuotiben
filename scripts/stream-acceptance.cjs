@@ -62,7 +62,9 @@ async function measure(board, model, question, interrupt) {
     if (problem) throw Error(await problem.evaluate(el => el.textContent));
     const stats = await board.evaluate(() => window.streamEvidence);
     assert(stats.updates >= 1 && stats.firstTextMs < stats.completeMs && !stats.earlySave, JSON.stringify(stats));
-    assert(mime.has('/api/notebook'));
+    const { notebookOrigins } = await import('../shared/notebook-origins.js');
+    const direct = model === 'doubao' && notebookOrigins.has(new URL(board.url()).origin);
+    assert(mime.has(direct ? '/cuotiben-ai' : '/api/notebook'));
     assert(stats.detailVisible, '完整解题过程应随模型输出自动显示');
     assert(await board.$('.self-check'), '生成结束应直接展示自检');
     await board.waitForFunction(() => document.querySelector('.solution-steps')?.textContent.includes('835'));

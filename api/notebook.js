@@ -40,6 +40,7 @@ export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
     };
     if (req.method === 'GET') return send(200, { models: key ? models : [] });
     if (req.method !== 'POST') return send(405, { message: '请求方式不受支持。' });
+    let stage = 'input';
     const origin = req.headers.origin;
     try {
       if (!origin || !['http://' + req.headers.host, 'https://' + req.headers.host].includes(origin))
@@ -56,6 +57,7 @@ export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]);
         if (body.model === 'doubao' ? !config.DOUBAO_API_KEY || !config.DOUBAO_MODEL_ID : !key)
           throw new ServiceError(503, '当前环境尚未配置所选模型。');
+        stage = 'quota';
         await countRequest(config, body);
         signal.throwIfAborted();
         if (res.destroyed) return;
@@ -72,6 +74,7 @@ export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
           startStream();
           if (!res.write(frame('delta', { text }))) await once(res, 'drain', { signal });
         } : undefined;
+        stage = body.model === 'doubao' ? 'doubao' : 'requesty';
         const run = repair => body.model === 'doubao' ? generateDoubao(config, body, signal, onDelta, repair) : generate(key, body, signal, onDelta, repair);
         let result;
         try {
@@ -93,6 +96,10 @@ export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
       }
     } catch (error) {
       if (res.destroyed) return;
+      if (!(error instanceof ServiceError)) {
+        console.error('Notebook request failed', { stage, type: error.name, code: error.code,
+          cause: error.cause?.code, region: process.env.VERCEL_REGION });
+      }
       const message = error instanceof ServiceError ? error.message : '模型连接中断或超时，原稿已保留。';
       if (res.headersSent) res.end(frame('error', { message }));
       else send(error.status || 502, { message });

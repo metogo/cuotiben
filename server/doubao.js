@@ -34,12 +34,13 @@ export async function generateDoubao(config, body, signal, onDelta, repair = '')
   const system = ink ? inkInstructions : [instructions, image ? photoInstructions : ''].join('\n');
   const content = image ? [{ type: 'image_url', image_url: { url: image } }, { type: 'text', text: prompt }] : prompt;
   const model = config.DOUBAO_MODEL_ID;
-  const response = await fetch(endpoint, {
+  const init = {
     method: 'POST', redirect: 'error', signal,
     headers: { Authorization: 'Bearer ' + config.DOUBAO_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, messages: [{ role: 'system', content: system + repair }, { role: 'user', content }],
       stream: true, response_format: { type: 'json_object' }, thinking: { type: 'disabled' }, max_tokens: 6000 })
-  });
+  };
+  const response = await connect(init);
   if (!response.ok) throw new ServiceError(response.status === 429 ? 429 : 502, '豆包暂时无法完成这次请求，请重试。');
   const { content: raw, returnedModel } = await readCompletion(response, model, onDelta, model.startsWith('ep-'));
   const result = parseModelObject(raw);
@@ -55,4 +56,15 @@ export async function generateDoubao(config, body, signal, onDelta, repair = '')
   if (image) Object.assign(parsed.lesson, { question: question || q, childWork: typeof result.childWork === 'string' ? result.childWork : '',
     teacher: typeof result.teacher === 'string' ? result.teacher : '' });
   return parsed;
+}
+
+async function connect(init) {
+  try {
+    return await fetch(endpoint, init);
+  } catch (error) {
+    // These failures occur before any HTTP request reaches the model.
+    if (init.signal.aborted || !['UND_ERR_CONNECT_TIMEOUT', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH'].includes(error.cause?.code)) throw error;
+    console.warn('Notebook model connection retry', error.cause.code, process.env.VERCEL_REGION);
+    return fetch(endpoint, init);
+  }
 }

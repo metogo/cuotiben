@@ -15,9 +15,9 @@ import { Icon, Modal, StageTrack } from './components/UI.jsx';
 import { changeSubject, corrected, get, saveQuestion, saveAttempt, remove } from './core/book.ts';
 import { useNotebook } from './core/useNotebook.js';
 import { useJob } from './core/useJob.js';
-import { consent, recognizePhoto, generateLesson } from './core/learning.js';
+import { generateLesson } from './core/learning.js';
 import { questionEntry, newDraft, overlapsQuestion } from './core/draft.js';
-import { splitMessage, missingInput, questionChoices } from './core/message.js';
+import { missingInput, questionChoices } from './core/message.js';
 import { readingSteps } from './core/solution.js';
 const names = {
   crop: '圈出一道错题',
@@ -142,15 +142,9 @@ function useBack({
   return back;
 }
 function useLessonActions({ job, entry, beforePhoto, d, setBox, write, nav, notice }) {
-  function runModel(label, work, model = 'doubao', streaming = false) {
-    job.run(label, async (signal, progress, publish) => {
-      if (model === 'doubao') await consent(signal);
-      if (!signal.aborted) await work(signal, progress, publish);
-    }, streaming);
-  }
   function accept(r, img, manual = false) {
     setBox(r);
-    if (d.img === img && ((d.problem && d.q) || manual)) {
+    if (d.img === img && (d.q || manual)) {
       if (manual || questionChoices(d.q).length || missingInput(d.q)) nav('edit');
       else if (d.lesson) nav('result');
       else generate(d);
@@ -167,55 +161,35 @@ function useLessonActions({ job, entry, beforePhoto, d, setBox, write, nav, noti
       notice('选区已保存在本机。请对照图片核对题干，补上必要的图中条件。');
       return;
     }
-    runModel(
-      '正在识别选区…',
-      async (signal, progress, publish) => {
-        const blob = await (await fetch(img)).blob(),
-          result = await recognizePhoto(blob, questionEntry(entry, img).id, signal);
-        if (signal.aborted) return;
-        const parsed = splitMessage(result.problem.text);
-        const stem = editedStem || parsed.q || result.problem.text;
-        const facts =
-          result.problem.visualContext?.facts?.map((f) => f.text).filter((t) => t && !stem.includes(t)) || [];
-        const reviewed = facts.length ? stem + '\n图中条件：' + facts.join('；') : stem;
-        const recognized = {
-          ...newDraft(),
-          id: d.id,
-          img,
-          box: r,
-          source: '照片圈题',
-          ...result,
-          q: reviewed,
-          recognizedText: reviewed,
-          child: prior?.child || '',
-          teacher: parsed.teacher || prior?.teacher || '',
-          detectedWork: result.problem.childWork,
-        };
-        write(recognized);
-        if (questionChoices(reviewed).length || missingInput(reviewed)) {
-          nav('edit');
-          notice(missingInput(reviewed) || '请选择要解析的一道题。');
-          return;
-        }
-        nav('result');
-        await analyzeDraft(recognized, signal, progress, publish);
-      },
-      'doubao', true,
-    );
+    const draft = { ...newDraft(), id: d.id, box: r, img, source: '照片圈题',
+      q: editedStem, child: prior?.child || '', teacher: prior?.teacher || '' };
+    write(draft);
+    nav('result');
+    job.run('正在解析选区…', (signal, progress, publish) => analyzeDraft(draft, signal, progress, publish), true);
   }
   async function analyzeDraft(draft, signal, progress, publish) {
-    const lesson = await generateLesson(
-      draft, questionEntry(entry, JSON.stringify([draft.id, draft.q, draft.child])), signal, progress, publish,
+    const result = await generateLesson(
+      draft, questionEntry(entry, JSON.stringify([draft.id, draft.img, draft.q, draft.child, draft.model])), signal, progress, publish,
     );
     if (signal.aborted) return;
-    write({ ...draft, lesson });
+    const { question, select, childWork, teacher, ...lesson } = result;
+    const q = draft.q || question;
+    const next = { ...draft, q, recognizedText: draft.recognizedText || question,
+      teacher: draft.teacher || teacher || '', detectedWork: childWork || draft.detectedWork };
+    if (select) {
+      write({ ...next, lesson: undefined });
+      nav('edit');
+      notice('选区里有多道题，请选择要收录的一道。');
+      return;
+    }
+    write({ ...next, lesson });
   }
   function generate(draft = d) {
     nav('result');
     // Keep the last completed lesson available if switching models fails or is cancelled.
     if (!draft.lesson) write(draft);
-    runModel('正在连接模型…', (signal, progress, publish) =>
-      analyzeDraft(draft, signal, progress, publish), draft.model, true);
+    job.run('正在连接模型…', (signal, progress, publish) =>
+      analyzeDraft(draft, signal, progress, publish), true);
   }
 
   return { accept, generate };

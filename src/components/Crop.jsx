@@ -89,7 +89,7 @@ export default function Crop({ photo, box, setBox, marks, accept, error, notice,
       )}
       <details className="send-notice">
         <summary>点击解析即将{full ? '整张照片' : '框内图片'}发给豆包识别并解析，请避开姓名。</summary>
-        <p>辅导作业仅在请求中转发图片。若服务账户启用调用日志，图片可能按日志设置留存，合规审查记录按适用要求保留。 <a href="https://docs.volcengine.com/docs/ark/volcengine-ark-platform-terms?lang=zh" target="_blank" rel="noreferrer">查看数据条款</a></p>
+        <p>错题本仅在本次解析请求中转发选区。若服务账户启用调用日志，图片可能按日志设置留存，合规审查记录按适用要求保留。 <a href="https://docs.volcengine.com/docs/ark/volcengine-ark-platform-terms?lang=zh" target="_blank" rel="noreferrer">查看数据条款</a></p>
       </details>
       <div className="footer-act">
         <button

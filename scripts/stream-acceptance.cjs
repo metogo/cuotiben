@@ -62,7 +62,7 @@ async function measure(board, model, question, interrupt) {
     if (problem) throw Error(await problem.evaluate(el => el.textContent));
     const stats = await board.evaluate(() => window.streamEvidence);
     assert(stats.updates >= 1 && stats.firstTextMs < stats.completeMs && !stats.earlySave, JSON.stringify(stats));
-    assert(mime.has(model === 'doubao' ? '/api/learning/tutor' : '/api/notebook'));
+    assert(mime.has('/api/notebook'));
     assert(stats.detailVisible, '完整解题过程应随模型输出自动显示');
     assert(await board.$('.self-check'), '生成结束应直接展示自检');
     await board.waitForFunction(() => document.querySelector('.solution-steps')?.textContent.includes('835'));

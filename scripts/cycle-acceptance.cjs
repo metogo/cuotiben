@@ -132,12 +132,18 @@ async function main() {
         assert.equal(rows.length,before.length+1);
         assert.equal(row.q,sample.text.trim());
         assert.equal(row.lesson.provider,'doubao');
-        assert.equal(row.subject, {math:'math',chi:'chinese',eng:'english'}[sample.subject]);
+        const expected = {math:'math',chi:'chinese',eng:'english'}[sample.subject];
+        assert([expected, 'unknown'].includes(row.subject), '错题不能被归入不相关的学科：' + row.subject);
+        if (row.subject === 'unknown') {
+          await p.select('.subject-filter', 'unknown');
+          await checkHome(p);
+          await p.select('.subject-filter', 'all');
+        }
       }
       const result = await correct(p,row,i);
       assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       assert.deepEqual(errors,[]);
-      report.push({round:i+1,question:live?sample.id:row.id,model:row.lesson.modelId,ms:Date.now()-started,...result});
+      report.push({round:i+1,question:live?sample.id:row.id,model:row.lesson.modelId,subject:row.subject,ms:Date.now()-started,...result});
       if(process.env.SHITI_REPORT) writeFileSync(process.env.SHITI_REPORT,JSON.stringify(report,null,2));
       console.log('通过',i+1,report.at(-1).question,result.counts.join('/'));
     }

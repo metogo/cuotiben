@@ -5,7 +5,7 @@ import NotebookEmpty from './NotebookEmpty.jsx';
 import StorageInfo from './StorageInfo.jsx';
 import LearningText from './LearningText.jsx';
 import { corrected } from '../core/book.ts';
-import { subjects, subjectKey, subjectName } from '../../shared/subjects.js';
+import { subjectKey, subjectName } from '../../shared/subjects.js';
 
 const shortDate = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' });
 
@@ -77,7 +77,7 @@ export default function Home({ active = true, rows, loading, open, record, error
             {rows.length > 0 && <div className="library-order">
             <select className="subject-filter" aria-label="按学科筛选" value={subject} onChange={e => selectSubject(e.target.value)}>
               <option value="all">全部学科</option>
-              {[...Object.keys(subjects), 'unknown'].filter(id => present.has(id)).map(id =>
+              {[...present].map(id =>
                 <option key={id} value={id}>{subjectName(id)}</option>)}
             </select>
             {visible.length > 0 && <small>最近收录在前</small>}

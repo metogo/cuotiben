@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { subjects, subjectKey } from '../../shared/subjects.js';
+import { subjects, subjectKey, subjectName } from '../../shared/subjects.js';
 import { Icon } from './UI.jsx';
 
 export default function ReviewSettings({ subject, busy, setSubject, remove }) {
@@ -20,7 +20,7 @@ export default function ReviewSettings({ subject, busy, setSubject, remove }) {
       <fieldset>
         <legend>本题学科</legend>
         <div className="subject-options">
-          {Object.entries({ ...subjects, unknown: '未分类' }).map(([key, name]) => (
+          {Object.entries({ ...subjects, [selected]: subjectName(selected), unknown: '未分类' }).map(([key, name]) => (
             <button key={key} value={key} aria-pressed={key === selected} onClick={() => choose(key)}>
               {name}{key === selected && <Icon name="ok" />}
             </button>

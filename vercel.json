@@ -2,13 +2,7 @@
   "framework": "vite",
   "outputDirectory": "dist",
   "functions": {
-    "api/notebook.js": { "maxDuration": 60 },
-    "api/family-learning.js": { "maxDuration": 180, "regions": ["icn1"] }
+    "api/notebook.js": { "maxDuration": 120, "regions": ["icn1"] }
   },
-  "rewrites": [
-    { "source": "/api/learning/:path*", "destination": "/api/family-learning?op=learning/:path*" },
-    { "source": "/api/consent", "destination": "/api/family-learning?op=consent" },
-    { "source": "/api/providers", "destination": "/api/family-learning?op=providers" }
-  ],
   "headers": [{ "source": "/api/:path*", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }]
 }

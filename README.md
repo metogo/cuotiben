@@ -13,17 +13,19 @@ npm run dev -- --port 43872 --strictPort
 
 在项目根目录的本地服务端环境设置 `REQUESTY_API_KEY`。默认网关为用户确认的 Requesty 全球入口。服务端限定模型、输入结构与输出长短，浏览器只与本站交互。密钥不会被打进 Vite 客户端。[Requesty 接入说明](https://docs.requesty.ai/quickstart)
 
-豆包通过现有辅导作业服务处理。开发环境可用 `LEARNING_SERVICE_ORIGIN` 指向现有服务的本地实例，实例的 `PUBLIC_APP_ORIGIN` 须为实际访问的 H5 地址。平板与本机统一从 [localhost:43872](http://localhost:43872/) 打开。若同时保留 IP 入口，可分别启动登记两个网页来源的辅导作业实例。本机 43873 对应 IP 入口，43878 对应 localhost 入口，后者由仅服务端读取的 `LEARNING_LOCALHOST_SERVICE_ORIGIN` 指定。两个入口各有独立的浏览器题本。保留服务本身的同意、发题和额度校验。实际拥有的服务端账号决定可用性。
+默认豆包使用错题本自己的服务端变量 `DOUBAO_API_KEY`、`DOUBAO_MODEL_ID`。照片和文字都直接 POST 到本站 `/api/notebook`，一次请求完成读题、解析和流式返回。学科只用于本机归档，空缺时显示“未分类”。
 
-照片和粘贴都在同一个家庭入口使用。首次发送选区前，页面向家长说明接收方、用途与留存条件。用户同意后，由辅导作业转发选区给豆包做真实识别。默认选整张，点“识别整张图”会发送整图；手动圈题只发送框内图片。家长可修改识别文字、重圈或在识别失败时照图补录。收录成功后，本题选区和讲解保存在本机。老师的参考答案单独保留到完整解析和订正对照页。[方舟平台条款](https://docs.volcengine.com/docs/ark/volcengine-ark-platform-terms?lang=zh) · [调用日志说明](https://console.volcengine.com/ark/region%3Acn-beijing/docs/log-collection)
+错题本使用 `CLOUDBASE_ENV_ID`、`CLOUDBASE_APIKEY` 访问上海区的专属集合 `cuotiben_daily_usage`。每日按北京时间、匿名浏览器身份计数，跨模型共 30 次，相同请求重试复用记录。集合仅存匿名摘要、日期及请求摘要，不存题干、照片、作答。首次使用需创建同名集合并向服务端账户授予读写权限。以上配置仅供服务端读取。
+
+照片和粘贴都在同一个家庭入口使用。首次发送选区前，页面向家长说明接收方、用途与留存条件。用户同意后，由错题本直接转发选区给豆包。默认选整张，点“识别整张图”会发送整图；手动圈题只发送框内图片。家长可修改识别文字、重圈或在识别失败时照图补录。收录成功后，本题选区和讲解保存在本机。老师的参考答案单独保留到完整解析和订正对照页。[方舟平台条款](https://docs.volcengine.com/docs/ark/volcengine-ark-platform-terms?lang=zh) · [调用日志说明](https://console.volcengine.com/ark/region%3Acn-beijing/docs/log-collection)
 
 ## 实时讲解
 
-H5 用 POST 发题并读取 SSE。豆包沿用辅导作业的提示和解析事件；可选模型由服务端向 Requesty 打开流式请求，按收到的正文增量转发。网关完成校验后才发出可收录的结果。客户端按收到的数据刷新，完整解法可按需展开。对 `/api/notebook` 使用 `Accept: text/event-stream` 获取事件流，原有 JSON 调用仍可用。[Requesty 流式接口](https://docs.requesty.ai/frameworks/axios)
+H5 用 POST 发题并读取 SSE。豆包直接返回模型增量，可选模型由服务端向 Requesty 打开流式请求，按收到的正文增量转发。网关完成校验后才发出可收录的结果。客户端按收到的数据刷新，完整解法可按需展开。对 `/api/notebook` 使用 `Accept: text/event-stream` 获取事件流，原有 JSON 调用仍可用。[Requesty 流式接口](https://docs.requesty.ai/frameworks/axios)
 
 ## 预览和发布
 
-Vercel 使用 Vite 构建及原生 Node 函数。开发验收在本地完成，全部开发完成后再部署 Preview。线上真实推理需要受管理的预览环境设置服务端密钥、控制试用访问，并由辅导作业服务认可预览来源。试用域名变化会产生新的浏览器存储空间。后续每用户每日 30 次的规则待跨模型统一实施。
+Vercel 使用 Vite 构建及原生 Node 函数。开发验收在本地完成，全部开发完成后再部署 Preview。线上真实推理需要受管理的预览环境设置服务端密钥、控制试用访问，并配置错题本专属计数集合。试用域名变化会产生新的浏览器存储空间。
 
 ## 验证
 
@@ -55,10 +57,10 @@ SHITI_PAPERS=/tmp/shiti-papers node scripts/browser-acceptance.cjs
 
 本地容量、同页三题、真实学生原作答、断网恢复与性能实测见[本地开发验收](docs/qa/本地开发验收.md)。
 
-固定验收入口为 `https://cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app`。在已关联项目且已登录 Vercel CLI 的工作目录运行 `node scripts/deploy-qa.mjs`，它会等待预览构建成功，再将验收域名绑定到新版本。辅导作业登记的是这个固定来源。正式发布应在该版本的会话、发题和真实 SSE 验收通过后执行。
+固定验收入口为 `https://cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app`。在已关联项目且已登录 Vercel CLI 的工作目录运行 `node scripts/deploy-qa.mjs`，它会等待预览构建成功，再将验收域名绑定到新版本。正式发布应在该版本的计数、发题和真实 SSE 验收通过后执行。
 
 生产配置也要提前验证。在预览通过后，用 `vercel deploy --prod --skip-domain` 构建候选版本，记录部署 ID 和构建网址。用 `vercel alias set <构建网址> cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app` 将同一个验收入口指向候选版本。复测文字与照片录题后，用 `vercel promote <生产候选部署ID>` 发布已测构建，并通过普通浏览器在正式域名重测。发布前用 `vercel inspect https://cuotiben-orpin.vercel.app` 记录上一版部署 ID，便于回滚。
 
-豆包在固定验收及正式域名上由浏览器直连辅导作业的腾讯 API。换域名时需同步核对腾讯网关的安全域名、服务端会话允许的来源及前端地址。
+预览和生产均须为错题本服务端配置豆包、Requesty 和专属计数集合的凭据。
 
 故障经过、实测数据和后续直连修复见[生产网关验收](docs/qa/生产网关验收.md)。

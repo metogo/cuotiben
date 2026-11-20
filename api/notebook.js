@@ -1,5 +1,7 @@
+import { countRequest } from '../server/quota.js';
+import { generateDoubao, validateDoubaoInput } from '../server/doubao.js';
 import { once } from 'node:events';
-import { generate, ServiceError } from '../server/requesty.js';
+import { generate, LessonFormatError, ServiceError, validateInput } from '../server/requesty.js';
 import { models } from '../shared/models.js';
 
 async function readInput(req) {
@@ -11,13 +13,13 @@ async function readInput(req) {
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > 64000) throw new ServiceError(413, '本题文字太长。');
+      if (size > 4000000) throw new ServiceError(413, '题目或图片超出大小限制。');
       chunks.push(chunk);
     }
     raw = Buffer.concat(chunks).toString();
   }
-  if (Buffer.byteLength(typeof raw === 'string' ? raw : JSON.stringify(raw)) > 64000)
-    throw new ServiceError(413, '本题文字太长。');
+  if (Buffer.byteLength(typeof raw === 'string' ? raw : JSON.stringify(raw)) > 4000000)
+    throw new ServiceError(413, '题目或图片超出大小限制。');
   if (typeof raw !== 'string') return raw;
   try {
     return JSON.parse(raw);
@@ -28,7 +30,7 @@ async function readInput(req) {
 function frame(event, value) {
   return 'event: ' + event + '\ndata: ' + JSON.stringify(value) + '\n\n';
 }
-export function notebookHandler(key, timeoutMs = 120000) {
+export function notebookHandler(key, timeoutMs = 120000, config = process.env) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -43,6 +45,8 @@ export function notebookHandler(key, timeoutMs = 120000) {
       if (!origin || !['http://' + req.headers.host, 'https://' + req.headers.host].includes(origin))
         throw new ServiceError(403, '请从当前网页发起解析。');
       const body = await readInput(req);
+      if (body?.model === 'doubao') validateDoubaoInput(body);
+      else validateInput(body);
       const controller = new AbortController();
       const abort = () => {
         if (!res.writableEnded) controller.abort();
@@ -50,6 +54,11 @@ export function notebookHandler(key, timeoutMs = 120000) {
       res.once('close', abort);
       try {
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]);
+        if (body.model === 'doubao' ? !config.DOUBAO_API_KEY || !config.DOUBAO_MODEL_ID : !key)
+          throw new ServiceError(503, '当前环境尚未配置所选模型。');
+        await countRequest(config, body);
+        signal.throwIfAborted();
+        if (res.destroyed) return;
         const streaming = req.headers.accept?.includes('text/event-stream');
         function startStream() {
           if (res.headersSent) return;
@@ -63,7 +72,17 @@ export function notebookHandler(key, timeoutMs = 120000) {
           startStream();
           if (!res.write(frame('delta', { text }))) await once(res, 'drain', { signal });
         } : undefined;
-        const { lesson } = await generate(key, body, signal, onDelta);
+        const run = repair => body.model === 'doubao' ? generateDoubao(config, body, signal, onDelta, repair) : generate(key, body, signal, onDelta, repair);
+        let result;
+        try {
+          result = await run('');
+        } catch (error) {
+          if (!(error instanceof LessonFormatError)) throw error;
+          signal.throwIfAborted();
+          if (streaming && res.headersSent) res.write(frame('reset', {}));
+          result = await run('\n上一次输出需要补全讲解结构。按原题核对，保留正确内容，只输出完整 JSON。hint、answer、check 各为一段非空文字，steps 为一个非空字符串数组。上一版内容如下：\n' + error.previous);
+        }
+        const { lesson } = result;
         if (res.destroyed) return;
         if (streaming) {
           startStream();
@@ -81,5 +100,5 @@ export function notebookHandler(key, timeoutMs = 120000) {
   };
 }
 export default function handler(req, res) {
-  return notebookHandler(process.env.REQUESTY_API_KEY, 55000)(req, res);
+  return notebookHandler(process.env.REQUESTY_API_KEY, 115000)(req, res);
 }

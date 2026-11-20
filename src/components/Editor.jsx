@@ -5,8 +5,8 @@ import { modelName } from '../../shared/models.js';
 import { Icon } from './UI.jsx';
 import { splitMessage, missingInput, questionChoices } from '../core/message.js';
 export default function Editor({ d, update, generate, notice, error, selectPhoto, reframe, focusField }) {
-  const [tail, tagTail] = useState(''),
-    [allowTail, trustTail] = useState('');
+  const [assignedText, rememberAssignment] = useState('');
+  const tail = assignedText === d.q ? '' : unassignedTail(d.q)?.[1];
   const [editing, setEditing] = useState(() => focusField.current === 'question' || !d.img || !d.q || splitMessage(d.q).multi);
   const choices = questionChoices(d.q);
   const stemField = useRef(null);
@@ -25,8 +25,7 @@ export default function Editor({ d, update, generate, notice, error, selectPhoto
     update(
       parts.multi ? { q: raw } : { q: parts.q, ...(parts.teacher !== undefined ? { teacher: parts.teacher } : {}) },
     );
-    notice(parts.multi && !questionChoices(raw).length ? '请保留一道题和对应材料。' : '');
-    tagTail('');
+    notice('');
   };
   function submit() {
     const reason = missingInput(d.q);
@@ -35,21 +34,10 @@ export default function Editor({ d, update, generate, notice, error, selectPhoto
       if (!editing) editStem();
       return;
     }
-    const p = splitMessage(d.q);
-    if (p.multi) {
-      if (!editing) editStem();
-      notice(choices.length ? '请选择要收录的一道题。' : '请在原框保留一道题，以及它需要的阅读材料、配图和对应答案。');
-      return;
-    }
-    const m = unassignedTail(d.q);
-    if (m && allowTail !== d.q) {
-      tagTail(m[1]);
-      return;
-    }
     generate();
   }
   function assign(target) {
-    if (target === '题目') trustTail(d.q);
+    if (target === '题目') rememberAssignment(d.q);
     else
       update({
         q: d.q.slice(0, d.q.lastIndexOf('\n')).trim(),
@@ -59,7 +47,6 @@ export default function Editor({ d, update, generate, notice, error, selectPhoto
             ? { teacher: [d.teacher, tail].filter(Boolean).join('\n') }
             : {}),
       });
-    tagTail('');
     notice('');
   }
   return (
@@ -68,7 +55,7 @@ export default function Editor({ d, update, generate, notice, error, selectPhoto
         <div className="manuscript">
           <QuestionInput
             value={d.q} editing={editing} field={stemField}
-            change={(q) => { update({ q }); tagTail(''); }}
+            change={q => update({ q })}
             commit={(text) => { if (!tail) replaceQ(text); }}
             pasteMessage={(text, formatted) => {
               const parts = splitMessage(text);
@@ -83,7 +70,7 @@ export default function Editor({ d, update, generate, notice, error, selectPhoto
           <div className="question-tools">
             {!editing && <button className="link" onClick={editStem}><Icon name="pencil" />修改题目</button>}
             {d.img ? (
-              <details className="original-photo" open={!d.problem || undefined}>
+              <details className="original-photo" open={!d.recognizedText || undefined}>
                 <summary>对照原图</summary>
                 <img className="proof" src={d.img} alt="本题选区" />
                 <button className="link" onClick={reframe}>重新圈题</button>
@@ -129,7 +116,7 @@ export default function Editor({ d, update, generate, notice, error, selectPhoto
         </div>
       )}
       <div className="review-submit">
-        <button className="primary" disabled={!d.q.trim() || !!tail} onClick={submit}>
+        <button className="primary" disabled={!d.q.trim()} onClick={submit}>
           生成解析
         </button>
       </div>

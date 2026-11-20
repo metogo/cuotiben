@@ -1,9 +1,10 @@
+import { parseLesson } from '../server/requesty.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { splitMessage, missingInput, questionChoices } from '../src/core/message.js';
-import { sections } from '../src/core/solution.js';
+import { recognizedSubject, subjectKey, subjectName } from '../shared/subjects.js';
 import { corrected, countMistakes, saveQuestion } from '../src/core/book.ts';
 test('答错次数从收录时算起，仅再次答错时递增', () => {
   assert.equal(countMistakes(), 1);
@@ -26,7 +27,23 @@ test('空本、未取得真实讲解及空的解析流不能产生可收录结�
   assert.equal(corrected({}), false);
   assert.ok(missingInput(''));
   assert.throws(() => saveQuestion({}), /真实模型/);
-  assert.throws(() => sections(''), /检查说明/);
+});
+test('学科只用于归档，学段前缀、课程外标签和未分类均可往返显示', () => {
+  assert.equal(recognizedSubject('高中数学'), 'math');
+  assert.equal(recognizedSubject('立体几何'), 'math');
+  assert.equal(recognizedSubject('数学（立体几何）'), 'math');
+  assert.equal(recognizedSubject('科学'), 'science');
+  const key = recognizedSubject('信息技术（Python 编程）');
+  assert.equal(subjectKey(key), key);
+  assert.equal(subjectName(key), '信息技术');
+  assert.equal(subjectName(recognizedSubject('')), '未分类');
+});
+test('完整的单步讲解可收录，同段内的明确步骤可单独阅读', () => {
+  const result = { hint: '先定位小提琴课的时间标注看看。', answer: 'A', check: '核对课程的开课时间。',
+    steps: ['第一步：读出 2 pm - 4 pm。第二步：找出起始时刻。'] };
+  assert.equal(parseLesson(result, 'doubao', 'doubao').lesson.steps.length, 2);
+  result.steps = ['海报写明课程从 2 pm 开始。'];
+  assert.deepEqual(parseLesson(result, 'doubao', 'doubao').lesson.steps, result.steps);
 });
 for (const name of ['opening', 'collected', 'corrected', 'again']) {
   test(name + ' 动效可编辑、能静态显示且满足传输预算', () => {
@@ -83,17 +100,6 @@ test('公开英语试卷上的价格保留为正文，数学选择题仍能显�
       .map((p) => p.formula),
     [math],
   );
-});
-
-test('多行原卷发题校验与实际 multipart 题干逐字节相符', { skip: !paper }, async () => {
-  const { formText } = await import('../src/core/learning.js');
-  const original = JSON.parse(readFileSync(paper)).find((row) => row.subject === 'eng').text;
-  assert(original.includes('\n'));
-  const form = new FormData();
-  form.set('text', original);
-  const received = (await new Response(form).formData()).get('text');
-  assert.equal(formText(original), received.trim());
-  assert.equal(formText(received), received.trim());
 });
 
 test('真实中文提示在 UTF-8、CRLF 和 JSON 转义边界处分块后仍逐字保真', async () => {

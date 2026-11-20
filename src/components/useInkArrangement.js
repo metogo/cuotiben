@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { arithmeticPreview } from '../core/arithmetic-preview.js';
 import { originalInkImage } from '../core/ink.js';
-import { consent, recognizeInk } from '../core/learning.js';
+import { recognizeInk } from '../core/learning.js';
 
 const previewDelay = 280;
 const recognitionDelay = 550;
@@ -37,7 +37,7 @@ export function useInkArrangement(ink, change, editing) {
       try {
         if (entry.current?.strokes !== strokes) entry.current = { strokes, id: crypto.randomUUID() };
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]);
-        const [image] = await Promise.all([originalInkImage(strokes), consent(signal)]);
+        const image = await originalInkImage(strokes);
         const text = await recognizeInk(image, entry.current.id, signal);
         const latest = current.current;
         if (!controller.signal.aborted && latest.ink.strokes === strokes)

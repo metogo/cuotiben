@@ -57,7 +57,7 @@ async function fill(p) {
   await p.evaluate(
     async ({ seed, image }) => {
       const db = await new Promise((resolve, reject) => {
-        const r = indexedDB.open('shiti-family-live', 1);
+        const r = indexedDB.open('shiti-family-live');
         r.onsuccess = () => resolve(r.result);
         r.onerror = () => reject(r.error);
       });

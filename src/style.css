@@ -45,6 +45,9 @@ button:disabled {
   outline: 3px solid #cb7800;
   outline-offset: 3px;
 }
+:root[data-pointer-focus] :where(button, a[href], summary, select, dialog, [tabindex], input[type=range], input[type=checkbox], input[type=radio]):focus {
+  outline: none;
+}
 button:not(:disabled):active {
   transform: translateY(1px);
 }

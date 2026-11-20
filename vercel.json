@@ -1,11 +1,14 @@
 {
   "framework": "vite",
   "outputDirectory": "dist",
-  "functions": { "api/notebook.js": { "maxDuration": 60 } },
+  "functions": {
+    "api/notebook.js": { "maxDuration": 60 },
+    "api/family-learning.js": { "maxDuration": 180, "regions": ["icn1"] }
+  },
   "rewrites": [
-    { "source": "/api/learning/:path*", "destination": "https://fudaozuoye.com/api/learning/:path*" },
-    { "source": "/api/consent", "destination": "https://fudaozuoye.com/api/consent" },
-    { "source": "/api/providers", "destination": "https://fudaozuoye.com/api/providers" }
+    { "source": "/api/learning/:path*", "destination": "/api/family-learning?op=learning/:path*" },
+    { "source": "/api/consent", "destination": "/api/family-learning?op=consent" },
+    { "source": "/api/providers", "destination": "/api/family-learning?op=providers" }
   ],
   "headers": [{ "source": "/api/:path*", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }]
 }

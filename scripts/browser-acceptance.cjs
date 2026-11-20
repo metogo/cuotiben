@@ -131,7 +131,11 @@ async function collectPhotos(p, button) {
 
   await button('解析框内题目');
   const hint = () => p.waitForSelector('.guidance .hint', {visible:true, timeout:185000});
-  const crop = () => p.$eval('.result-reader .proof', el => el.src);
+  const crop = async () => {
+    await p.$eval('.result-reader .original-photo', el => { el.open = true; });
+    await p.waitForSelector('.result-reader .proof');
+    return p.$eval('.result-reader .proof', el => el.src);
+  };
   await hint();
   const firstCrop = await crop();
   const model = 'openai/gpt-5.6-sol';

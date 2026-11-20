@@ -364,8 +364,8 @@ function recordActions({ job, d, afterSave, nav, write, setLevel, setAttempt, at
   }
   function finish(correct) {
     job.run('正在保存…', async () => {
-      const row = await saveAttempt(d.id, { ...attempt, correct, date: Date.now() });
-      write(row);
+      const progress = await saveAttempt(d.id, { ...attempt, correct, date: Date.now() });
+      write(current => ({ ...current, ...progress }));
       nav('score');
     });
   }

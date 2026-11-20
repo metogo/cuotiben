@@ -61,6 +61,8 @@ async function main() {
       await click(page, '解析框内题目');
       await waitForModel(page, '.guidance .hint', '解析框内题目', retries);
       const solveMs = Date.now() - start;
+      await page.click('.original-photo summary');
+      await page.waitForSelector('.original-photo .proof');
       const imgLength = await page.$eval('.proof', (img) => new TextEncoder().encode(img.src).length);
       await click(page, n < 6 ? '收录并圈下一题' : '加入错题本');
       await until(page, '.collection-feedback');

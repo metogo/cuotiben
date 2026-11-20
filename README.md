@@ -54,3 +54,11 @@ SHITI_PAPERS=/tmp/shiti-papers node scripts/browser-acceptance.cjs
 可通过 `PUPPETEER_MODULE` 和 `CHROME_PATH` 指定已有测试工具的位置。
 
 本地容量、同页三题、真实学生原作答、断网恢复与性能实测见[本地开发验收](docs/qa/本地开发验收.md)。
+
+固定验收入口为 `https://cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app`。在已关联项目且已登录 Vercel CLI 的工作目录运行 `node scripts/deploy-qa.mjs`，它会等待预览构建成功，再将验收域名绑定到新版本。辅导作业登记的是这个固定来源。正式发布应在该版本的会话、发题和真实 SSE 验收通过后执行。
+
+生产配置也要提前验证。在预览通过后，用 `vercel deploy --prod --skip-domain` 构建候选版本，记录部署 ID 和构建网址。用 `vercel alias set <构建网址> cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app` 将同一个验收入口指向候选版本。复测文字与照片录题后，用 `vercel promote <生产候选部署ID>` 发布已测构建，并通过普通浏览器在正式域名重测。发布前用 `vercel inspect https://cuotiben-orpin.vercel.app` 记录上一版部署 ID，便于回滚。
+
+豆包在固定验收及正式域名上由浏览器直连辅导作业的腾讯 API。换域名时需同步核对腾讯网关的安全域名、服务端会话允许的来源及前端地址。
+
+故障经过、实测数据和后续直连修复见[生产网关验收](docs/qa/生产网关验收.md)。

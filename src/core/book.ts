@@ -26,17 +26,6 @@ export interface Question {
   lesson: Lesson;
 }
 type StoredQuestion = Omit<Question, 'img'> & { img: Blob | string };
-async function forDisplay(row: StoredQuestion): Promise<Question> {
-  if (typeof row.img === 'string') return { ...row, img: row.img };
-  const photo = row.img;
-  const img = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(Error('本机无法读取这道题的选区。'));
-    reader.readAsDataURL(photo);
-  });
-  return { ...row, img };
-}
 type Summary = Pick<Question, 'id' | 'date' | 'q' | 'source' | 'subject'> & { isCorrected: boolean; mistakeCount: number };
 export function countMistakes(attempts: Attempt[] = []): number {
   return 1 + attempts.filter(attempt => attempt.correct === false).length;
@@ -48,9 +37,11 @@ let opening: Promise<IDBDatabase> | undefined;
 function database() {
   if (!opening) {
     opening = new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('shiti-family-live', 1);
+      const request = indexedDB.open('shiti-family-live', 2);
       request.onupgradeneeded = () => {
-        for (const name of ['questions', 'list']) request.result.createObjectStore(name, { keyPath: 'id' });
+        for (const name of ['questions', 'list', 'reviews']) {
+          if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: 'id' });
+        }
       };
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -89,64 +80,45 @@ export async function list(): Promise<Summary[]> {
   }));
   return rows.sort((a, b) => b.date - a.date);
 }
-export async function get(id: string): Promise<Question> {
+interface ReviewHistory { id: string; attempts: Attempt[] }
+export async function get(id: string): Promise<StoredQuestion> {
   const db = await database();
-  const row = await read<StoredQuestion | undefined>(db.transaction('questions').objectStore('questions').get(id));
-  if (!row) throw Error('这道题已移除，请返回错题本。');
-  return forDisplay(row);
+  const tx = db.transaction(['questions', 'list', 'reviews']);
+  const [question, summary, history] = await Promise.all([
+    read<StoredQuestion | undefined>(tx.objectStore('questions').get(id)),
+    read<Summary | undefined>(tx.objectStore('list').get(id)),
+    read<ReviewHistory | undefined>(tx.objectStore('reviews').get(id)),
+  ]);
+  if (!question || !summary) throw Error('这道题已移除，请返回错题本。');
+  return { ...question, subject: summary.subject, attempts: history?.attempts ?? question.attempts ?? [] };
 }
-function update(
-  id: string,
-  change: (previous?: StoredQuestion) => StoredQuestion | undefined,
-): Promise<StoredQuestion | undefined> {
-  return database().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(['questions', 'list'], 'readwrite');
-        const questions = tx.objectStore('questions'),
-          summaries = tx.objectStore('list');
-        let result: StoredQuestion | undefined, cause: unknown;
-        const request = questions.get(id);
-        request.onsuccess = () => {
-          try {
-            result = change(request.result);
-            if (result === request.result) return;
-            if (!result) {
-              questions.delete(id);
-              summaries.delete(id);
-              return;
-            }
-            const { date, q, source } = result;
-            questions.put(result);
-            summaries.put({
-              id,
-              date,
-              q: Array.from(q).slice(0, 180).join(''),
-              source,
-              subject: result.subject,
-              isCorrected: corrected(result),
-              mistakeCount: countMistakes(result.attempts),
-            });
-          } catch (error) {
-            cause = error;
-            tx.abort();
-          }
-        };
-        tx.onabort = () => {
-          const error = cause || tx.error;
-          reject(
-            error instanceof DOMException && error.name === 'QuotaExceededError'
-              ? Error('浏览器存储空间不足。请先释放设备空间，再回来重试，之前收好的题仍在。')
-              : error || Error('本地写入中断，请重试。'),
-          );
-        };
-        tx.oncomplete = () => {
-          window.dispatchEvent(new Event('bookchange'));
-          bus?.postMessage('refresh');
-          resolve(result);
-        };
-      }),
-  );
+
+async function update<T>(stores: string[], action: (tx: IDBTransaction) => Promise<T>): Promise<T> {
+  const db = await database();
+  const tx = db.transaction(stores, 'readwrite');
+  const committed = new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(tx.error || Error('本地写入中断，请重试。'));
+  });
+  const work = action(tx).catch(error => {
+    // A failed request may already have aborted the transaction.
+    try {
+      tx.abort();
+    } catch (abortError) {
+      if (!(abortError instanceof DOMException && abortError.name === 'InvalidStateError')) throw abortError;
+    }
+    throw error;
+  });
+  try {
+    const [result] = await Promise.all([work, committed]);
+    window.dispatchEvent(new Event('bookchange'));
+    bus?.postMessage('refresh');
+    return result;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError')
+      throw Error('浏览器存储空间不足。请先释放设备空间，再回来重试，之前收好的题仍在。');
+    throw error;
+  }
 }
 const bus = typeof window === 'undefined' || !window.BroadcastChannel ? null : new BroadcastChannel('shiti-book');
 if (bus) bus.onmessage = () => window.dispatchEvent(new Event('bookchange'));
@@ -168,23 +140,50 @@ async function storeQuestion(q: Question) {
     if (!/^data:image\/(?:jpeg|png|webp);base64,/i.test(photo)) throw Error('本题选区格式无效，请重新圈题。');
     photo = await (await fetch(photo)).blob();
   }
-  await update(q.id, (old) => old || { ...q, img: photo });
+  await update(['questions', 'list'], async tx => {
+    const questions = tx.objectStore('questions');
+    if (await read(questions.getKey(q.id)) !== undefined) return;
+    await Promise.all([
+      read(questions.add({ ...q, img: photo })),
+      read(tx.objectStore('list').add({
+        id: q.id, date: q.date, q: Array.from(q.q).slice(0, 180).join(''),
+        source: q.source, subject: q.subject,
+        isCorrected: corrected(q), mistakeCount: countMistakes(q.attempts),
+      })),
+    ]);
+  });
+}
+async function requireSummary(tx: IDBTransaction, id: string): Promise<Summary> {
+  const row = await read<Summary | undefined>(tx.objectStore('list').get(id));
+  if (!row) throw Error('这道题已移除，请返回错题本。');
+  return row;
 }
 export function saveAttempt(id: string, attempt: Attempt) {
-  return update(id, (old) => {
-    if (!old) throw Error('这道题已移除，请返回错题本。');
-    const attempts = old.attempts || [];
-    if (attempts.some((a) => a.id === attempt.id)) return old;
-    return { ...old, attempts: [...attempts, attempt] };
-  }).then((row) => forDisplay(row!));
+  return update(['questions', 'reviews', 'list'], async tx => {
+    const reviews = tx.objectStore('reviews');
+    const [summary, history] = await Promise.all([
+      requireSummary(tx, id), read<ReviewHistory | undefined>(reviews.get(id)),
+    ]);
+    // The first review inherits any attempts saved by the old app. Keep its
+    // original photo record intact, including when the image bytes are unavailable.
+    const attempts = history?.attempts ?? (await read<StoredQuestion>(tx.objectStore('questions').get(id))).attempts ?? [];
+    if (attempts.some(a => a.id === attempt.id)) return { attempts, subject: summary.subject };
+    const next = [...attempts, attempt];
+    await Promise.all([
+      read(reviews.put({ id, attempts: next })),
+      read(tx.objectStore('list').put({ ...summary, isCorrected: attempt.correct, mistakeCount: countMistakes(next) })),
+    ]);
+    return { attempts: next, subject: summary.subject };
+  });
 }
 export function remove(id: string) {
-  return update(id, () => undefined);
+  return update(['questions', 'reviews', 'list'], async tx => {
+    await Promise.all(Array.from(tx.objectStoreNames, name => read(tx.objectStore(name).delete(id))));
+  });
 }
-
-export async function changeSubject(id: string, subject: string): Promise<void> {
-  await update(id, (row) => {
-    if (!row) throw Error('这道题已移除，请返回错题本。');
-    return { ...row, subject };
+export function changeSubject(id: string, subject: string) {
+  return update(['list'], async tx => {
+    const row = await requireSummary(tx, id);
+    await read(tx.objectStore('list').put({ ...row, subject }));
   });
 }

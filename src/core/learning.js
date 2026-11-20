@@ -3,8 +3,27 @@ import { readSSE } from '../../shared/sse.js';
 import { lessonPreview } from './lessonPreview.js';
 import { sections } from './solution.js';
 // The upstream service owns guardian consent, daily admission, model selection and inference.
-const api = '/api';
-const options = { credentials: 'include', cache: 'no-store' };
+const notebookOrigins = new Set([
+  'https://cuotiben-orpin.vercel.app',
+  'https://cuotiben-qa-xiaoweis-projects-cf1fe430.vercel.app',
+]);
+const direct = notebookOrigins.has(globalThis.location?.origin);
+const learningApi = direct
+  ? 'https://mini-0324-100046523669-03b06729f-1406836756.ap-shanghai.app.tcloudbase.com/api'
+  : '/api';
+const options = { cache: 'no-store' };
+let session;
+
+async function learningFetch(path, init) {
+  if (path === '/notebook') return fetch('/api/notebook', { ...init, credentials: 'same-origin' });
+  const headers = new Headers(init.headers);
+  if (direct && path !== '/consent') {
+    await consent(init.signal);
+    headers.set('x-notebook-consent', session.token);
+  }
+  const suffix = direct && path === '/consent' ? '?client=notebook' : '';
+  return fetch(learningApi + path + suffix, { ...init, headers, credentials: direct ? 'omit' : 'same-origin' });
+}
 
 async function verify(response) {
   if (response.ok) return response;
@@ -23,7 +42,7 @@ async function verify(response) {
 }
 async function post(path, body, signal, accept = 'application/json') {
   return verify(
-    await fetch(api + path, {
+    await learningFetch(path, {
       ...options,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: accept },
@@ -33,9 +52,16 @@ async function post(path, body, signal, accept = 'application/json') {
   );
 }
 export async function consent(signal) {
+  if (direct && session && session.expiresAt - Date.now() > 180000) return;
   const body = await (await post('/consent', {}, signal)).json();
   if (!body.accepted || !body.providers?.some((p) => p.id === 'doubao' && p.available && p.mode === 'live')) {
     throw Error('当前没有可用的真实模型。本次作业尚未发送。');
+  }
+  if (direct) {
+    const next = body.notebookSession;
+    if (!next?.token || !Number.isFinite(next.expiresAt) || next.expiresAt <= Date.now())
+      throw Error('没有取得有效的辅导会话，请重试。');
+    session = next;
   }
 }
 function browserId() {
@@ -86,7 +112,7 @@ async function analyze(stage, ticket, values, signal) {
     form.append(key, value);
   let result;
   const complete = await events(
-    await fetch(api + '/learning/analyze', { ...options, method: 'POST', body: form, signal }),
+    await learningFetch('/learning/analyze', { ...options, method: 'POST', body: form, signal }),
     (name, data) => {
       if (name === 'recognized' || name === 'graph') result = data;
     },

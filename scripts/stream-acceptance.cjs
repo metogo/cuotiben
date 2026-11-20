@@ -67,7 +67,7 @@ async function measure(board, model, question, interrupt) {
     assert(mime.has(direct ? '/cuotiben-ai' : '/api/notebook'));
     assert(stats.detailVisible, '完整解题过程应随模型输出自动显示');
     assert(await board.$('.self-check'), '生成结束应直接展示自检');
-    await board.waitForFunction(() => document.querySelector('.solution-steps')?.textContent.includes('835'));
+    await board.waitForFunction(() => document.querySelector('.guidance')?.textContent.includes('835'));
     return { model, ...stats, interruptedAndRetried: interrupt, sse: [...mime] };
   } finally { board.off('response', response); }
 }
